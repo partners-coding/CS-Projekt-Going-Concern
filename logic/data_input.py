@@ -8,18 +8,19 @@ Sections:
     4. AI import with the Claude API (any annual report -> standard format)
 """
 
-import base64
-import io
-import json
-import math
-from dataclasses import dataclass
-from datetime import date
+# imports the necessary libraries for the code. 
+import base64                           # converts files (PDF, Excel, CSV) into text needed to send to the Claude API
+import io                               # treats data in memory like a file, so it can be read by pandas (Excel, CSV)
+import json                             # concerts JSON text answer of AI into a Python dictionary
+import math                             # math helpers, e.g. math.isnan() to check if there are empty table cells
+from dataclasses import dataclass       # short way to define class FinancialYear (one financial year)
+from datetime import date               # today's date, used to calculate age of the company
 
-import pandas as pd
+import pandas as pd                     # external library for dataframes (tables) -> (financial statements: line items x years)
 
 
 # ============================================================================
-# First the financial statements (balance sheet, income statement and cash flow statement) need to be mapped onto a standard format, so that the analysis can be done in a uniform way.
+# First the financial statements (balance sheet, income statement and cash flow statement) need to be mapped into a standard format, so that the analysis can be done in a uniform way.
 #
 # Every uploaded annual report - whatever its layout or accounting standard
 # (Swiss CO, Swiss GAAP FER, IFRS, ...) - is mapped onto the line items below.
@@ -32,20 +33,20 @@ import pandas as pd
 # this is done for all needed items in the balance sheet, income statement and cash flow statement.
 # ---------------------------------------------------------------------------
 LINE_ITEMS = {
-    # Balance sheet - assets
+    # Balance sheet: assets
     "cash": ("Cash and cash equivalents", "Balance sheet"),
     "receivables": ("Short-term receivables", "Balance sheet"),
     "inventories": ("Inventories", "Balance sheet"),
     "other_current_assets": ("Other current assets", "Balance sheet"),
     "non_current_assets": ("Non-current assets", "Balance sheet"),
 
-    # Balance sheet - liabilities
+    # Balance sheet:liabilities
     "st_interest_debt": ("Short-term interest-bearing liabilities", "Balance sheet"),
     "other_current_liabilities": ("Trade payables and other short-term liabilities", "Balance sheet"),
     "lt_interest_debt": ("Long-term interest-bearing liabilities", "Balance sheet"),
     "other_non_current_liabilities": ("Other long-term liabilities and provisions", "Balance sheet"),
 
-    # Balance sheet - equity (split as required by Swiss CO Art. 725a)
+    # Balance sheet:equity (split as required by Swiss CO Art. 725a)
     "share_capital": ("Share capital", "Balance sheet"),
     "legal_capital_reserves": ("Legal capital reserves", "Balance sheet"),
     "legal_retained_earnings": ("Legal retained earnings", "Balance sheet"),
@@ -66,94 +67,112 @@ LABELS = {k: v[0] for k, v in LINE_ITEMS.items()}       #internal name -> label 
 MAX_YEARS = 5                                           #the app analyses financial statements of 5 years max, from the oldest to the most recent year
 
 
-def empty_table(years):
-    """Empty input table: rows = line items, columns = years (oldest left)."""
-    df = pd.DataFrame({str(y): [float("nan")] * len(KEYS) for y in years}, index=KEYS)
-    df.index.name = "item"
-    return df
+def empty_table(years):                                                                 # This function creates an empty input table. 
+    """Empty input table: rows = line items, columns = years (oldest left)."""          # The line items are the rows and the years are the columns, the oldest year is on the left
+    df = pd.DataFrame({str(y): [float("nan")] * len(KEYS) for y in years}, index=KEYS)  # explanations: nan = "not a number" = empty cell, index = Keys => the rows are the (19) line items used in the code, e.g. "cash", "receivables"
+    df.index.name = "item"                                                              # the name of the index (row labels) is defined as "item" 
+    return df                                                                           
 
 
-def _num(value):
+def _num(value):                                                                        # to be able to do calculations with the values in the table, we need to convert them to float. If a cell is empty, we count it as 0.
     """Convert a table cell to float; empty cells count as 0."""
-    try:
+    try:                                       # try-function = if the value can be converted to float, we do it, otherwise we return 0.0
         v = float(value)
     except (TypeError, ValueError):
         return 0.0
     return 0.0 if math.isnan(v) else v
 
 
-@dataclass
-class FinancialYear:
+@dataclass                      # Python automatically generates the __init__() function, so we don't have to write it ourselves. The class FinancialYear represents one financial year with its line items and derived totals.
+class FinancialYear: 
     """One financial year in the standard format, with derived totals."""
 
-    year: str
-    values: dict
+    year: str                     # Financial year as text, e.g. "2025"
+    values: dict                  # all line items of this year, e.g. {"cash": 1000000.0, "receivables": 2000000.0}
     industry: str = "General"     # selects the traffic-light thresholds, according to the industry of the company
 
     def __getattr__(self, name):
         # Allows fy.cash, fy.revenue, ... instead of fy.values["cash"]
-        if name in LINE_ITEMS:
-            return _num(self.values.get(name))
-        raise AttributeError(name)
+        # Python calls this function automatically when an attribute doesn't exist directly in the class
+        if name in LINE_ITEMS:                      # is requested name one of our line items?
+            return _num(self.values.get(name))      # yes: return its value as a number (empty cell = 0)
+        raise AttributeError(name)                  # no: normal error "this attribute doesn't exist"
 
     # -- Derived totals -----------------------------------------------------
+    # Values that are not entered but calculated from the line items. These are used in the analysis and ratios.
+    # @property = value that is calculated each time it is used (fy.total_assets without brackes), instead of being stored in the object.
+    # This way we always have the latest value in the table if the line items change.
+    
     @property
     def current_assets(self):
+        # current assts = cash + receivables + inventories + other current assets
         return self.cash + self.receivables + self.inventories + self.other_current_assets
 
     @property
     def total_assets(self):
+        # total assets = current assets + non-current assets
         return self.current_assets + self.non_current_assets
 
     @property
     def current_liabilities(self):
+        # current liabilities = short-term interest-bearing debt + other current liabilities (trade payables, accruals, provisions)
         return self.st_interest_debt + self.other_current_liabilities
 
     @property
     def total_liabilities(self):
+        # total liabilities (Fremdkapital) = current (short-term) liabilities + long-term interest-bearing debt + other non-current liabilities
         return (self.current_liabilities + self.lt_interest_debt
                 + self.other_non_current_liabilities)
 
     @property
     def interest_bearing_debt(self):
+        # only debt that bears interest (bank loans, bonds, leasing, other loans) is relevant for the net debt / EBITDA ratio. Trade payables and accruals are not interest-bearing and therefore not included.
         return self.st_interest_debt + self.lt_interest_debt
 
     @property
     def equity(self):
+        # equity = share capital + legal capital reserves + legal retained earnings + other equity (voluntary reserves, retained earnings / losses)
         return (self.share_capital + self.legal_capital_reserves
                 + self.legal_retained_earnings + self.other_equity)
 
     @property
     def ebitda(self):
+        # EBITDA = EBIT + depreciation and amortisation. 
         return self.ebit + self.depreciation
 
     @property
     def has_cash_flow_statement(self):
-        v = self.values.get("operating_cash_flow")
-        return v is not None and not (isinstance(v, float) and math.isnan(v))
+        # True if operating cash flow was entered, False if cell is empty
+        v = self.values.get("operating_cash_flow")                              #value from the table, can be None if the cell is empty
+        return v is not None and not (isinstance(v, float) and math.isnan(v))   # not missing and not NaN => cash flow statement is available
 
     @property
     def ocf(self):
         """Operating cash flow. If no cash flow statement is available we use
         the common approximation net income + depreciation."""
-        if self.has_cash_flow_statement:
-            return self.operating_cash_flow
-        return self.net_income + self.depreciation
+        if self.has_cash_flow_statement:                                        # if real value from the cash flow statement is available, we use it 
+            return self.operating_cash_flow                                     
+        return self.net_income + self.depreciation                              # if not, approximation 
 
     @property
     def balance_difference(self):
         """Assets minus (liabilities + equity); should be 0."""
+        # used for balance check: difference means figures are wrong or incomplete
         return self.total_assets - (self.total_liabilities + self.equity)
 
 
 def table_to_years(df, industry="General"):
     """Input table (DataFrame) -> list of FinancialYear, oldest first.
     Columns that are completely empty are ignored."""
-    years = []
-    for col in df.columns:
-        if df[col].isna().all():
-            continue
-        years.append(FinancialYear(str(col), {k: df.at[k, col] if k in df.index else None
+    years = []                                                                  # empty list, filled with one FinancialYear per year
+    for col in df.columns:                                                      # go through every column of table
+        if df[col].isna().all():                                                # column completely empty?
+            continue                                                            # skip and go to next year
+
+        # create one FinancialYear: year dictionary {line item: value}, industry
+        # df.at[k, col] = calue in row k (line item) and column col (year);
+        # None if the line item is missing in a table
+        years.append(FinancialYear(str(col), {k: df.at[k, col] if k in df.index else None       
                                                 for k in KEYS}, industry))
     return years
 
@@ -185,9 +204,10 @@ CANTONS = ["AG", "AI", "AR", "BE", "BL", "BS", "FR", "GE", "GL", "GR", "JU", "LU
 # ---------------------------------------------------------------------------
 # Now we define the traffic-light thresholds for the ratios. The auditor can select the industry of the company and the app will use the corresponding thresholds for the analysis. 
 # The thresholds are defined as tuples (green, red), values in between are yellow. 
-# For "lower is better" ratios (net debt / EBITDA): (green up to, red above).
+# For "lower is better" ratios (e.g. for net debt / EBITDA): (green up to, red above).
 # Rules of thumb for teaching purposes - the auditor must apply judgement.
 # ---------------------------------------------------------------------------
+
 GENERAL = {"cash_ratio": (0.20, 0.10), "quick_ratio": (1.00, 0.70), "current_ratio": (1.50, 1.00),
            "equity_ratio": (0.20, 0.10), "ebitda_margin": (0.08, 0.00), "net_debt_ebitda": (3.0, 4.0)}
 
@@ -215,15 +235,17 @@ INDUSTRY_THRESHOLDS = {
 
 
 def thresholds(industry, ratio_key):
+    # .get(industry, GENERAL): take the threshold of this industry, if industry is unknown the general thresholds are used instead
+    # [ratio_key]: pick thresholds of requested ratio
     return INDUSTRY_THRESHOLDS.get(industry, GENERAL)[ratio_key]
 
 
 def default_profile():
+    # these are the starting values of company profile (page 1) that get shown in the app before the users enter anything themselves
     return {"legal_form": LEGAL_FORMS[0], "industry": "General", "canton": "SG",
             "founded": 2000, "employees": 50, "currency": "CHF", "listed": False,
             "audit_type": AUDIT_TYPES[0], "group": False, "support_letter": False,
             "description": "", "key_risks": "", "notes": ""}
-
 
 # ---------------------------------------------------------------------------
 # Here we check the profile to see if an ordinary audit is required (CO Art. 727) or if a limited audit is possible (CO Art. 727a). 
@@ -242,10 +264,10 @@ def audit_type_check(profile, years):
     #If company isn't listed => For each of the last two years: Are at least 2 of the 3 thresholds exceeded? (total assets CHF 20m, revenue CHF 40m, 250 FTE)
     if len(years) >= 2:
         both = [sum(exceeded(fy)) >= 2 for fy in years[-2:]]
-        if all(both):                                                                       #both years exceeded 2 of 3 thresholds -> audit required
+        if all(both):                                                                       #both years exceeded 2 of 3 thresholds -> ordinary audit required
             return True, ("2 of 3 size thresholds exceeded in two consecutive years "
                           "-> ordinary audit (CO Art. 727 para. 1 no. 2).")
-    return False, ("Size thresholds (total assets CHF 20m, revenue CHF 40m, 250 FTE) not "
+    return False, ("Size thresholds (total assets CHF 20m, revenue CHF 40m, 250 FTE) not "  # thresholds aren't exceeded -> limited audit possible, unless company voluntarly wants to do ordinary audit (= opt in)
                    "exceeded -> limited audit possible (CO Art. 727a), unless opted in.")
 
 
@@ -341,9 +363,14 @@ SAMPLE_PROFILES = {
 }
 
 
-def sample_table(name):
+def sample_table(name):                                                                          # turns a sample company into an input table, in same format as an uploaded and standardised annual report 
     data = SAMPLES[name]
-    df = pd.DataFrame({y: [data[k][i] * 1000.0 for k in KEYS] for i, y in enumerate(YEARS)},
+    
+    # Builds the table column by column: 
+    # enumerate(Years) gives position and year (0, "2021") 
+    # data[k][i] = value of line item k in year number i     
+    #  * 1000.0 = converts from CHF thousands into full CHF                          
+    df = pd.DataFrame({y: [data[k][i] * 1000.0 for k in KEYS] for i, y in enumerate(YEARS)},      
                       index=KEYS)
     df.index.name = "item"
     return df
@@ -371,8 +398,14 @@ DEFAULT_MODEL = "claude-sonnet-5-5"
 # Then we define the accounting rules that the AI must follow
 #----------------------------------------------------------------------------
 
+# List of all standard line items as text, one per line, for the instructions to the AI.
+# Example of one line: "- cash: Cash and cash equivalents (Balance sheet)"
+# k = internal name, label = name shown in the app, stmt = statement it belongs to;
+# "\n".join(...) puts all lines together, separated by line breaks.
+
 ITEM_LIST = "\n".join(f"- {k}: {label} ({stmt})" for k, (label, stmt) in LINE_ITEMS.items())
 
+# Prompt for the AI API: role, task, rules
 SYSTEM_PROMPT = f"""You are an expert in financial reporting (Swiss CO, Swiss GAAP FER, IFRS). You receive the annual report of a company (balance sheet,
 income statement and, if available, cash flow statement) in any layout.
 Map every line item onto the following standard items and add up where necessary:
@@ -437,7 +470,7 @@ RESPONSE_SCHEMA = {
     "additionalProperties": False,
 }
 
-# In the following functions we convert the uploaded files into a format that the Claude API can understand, call the API and parse the answer into our standard format.
+# In the following functions we convert the uploaded files into a format that the Claude API can understand, call the API and put the answer into our standard format.
 def file_to_content(name, data: bytes):
     """Converts one uploaded file into content blocks for the Claude API."""
     ext = name.lower().rsplit(".", 1)[-1]                   #file extension, e.g. "pdf", "xlsx", "csv"
