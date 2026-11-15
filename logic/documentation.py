@@ -26,55 +26,64 @@ from logic.ml_model import ROOT         # our own file: path of project folder (
 
 
 # ============================================================================
-# PDF export: documentation of the going concern audit procedure (working paper).
+# PDF export: documentation of the going concern audit procedure (working paper). 
 #
 # Built with fpdf2. The built-in PDF fonts only support Latin-1 characters, so
 # all text passes through _t() which replaces unsupported characters.
 # ============================================================================
 
+# Traffic-light colours as RGB values (red, green, blue, each 0-255)
 COLOURS = {"green": (46, 158, 107), "amber": (242, 182, 50), "red": (214, 69, 69),
            "grey": (160, 160, 160)}
+# dark main colour for headings
 INK = (30, 43, 51)
 
 
 def _t(text):
     """Make text safe for the Latin-1 PDF core fonts."""
+    # the built.in pdf fonts don't know some special characters -> hence we replace them:
     repl = {"–": "-", "—": "-", "≤": "<=", "≥": ">=", "’": "'", "‘": "'", "“": '"', "”": '"',
             "…": "...", "→": "->", "•": "-", "×": "x"}
-    text = str(text)
-    for a, b in repl.items():
-        text = text.replace(a, b)
+    text = str(text)                                     # make sure we have text (also if a number is passed)
+    for a, b in repl.items():                            # go through every pair (special character, replacement)  
+        text = text.replace(a, b)                        # replace special character in the text, any other unknown character becomes "?" instead of crashing the pdf export.
     return text.encode("latin-1", "replace").decode("latin-1")
 
+# Here we 
 
 class Report(FPDF):
    
     def footer(self):
         """Footer on every page: note on the left, page number on the right."""
-        self.set_y(-12)                       # 12 mm above the bottom edge
-        self.set_font("Helvetica", "I", 8)
-        self.set_text_color(130, 130, 130)
-        self.cell(0, 6, _t("Going Concern Audit - confidential"), align="L")
-        self.cell(0, 6, f"Page {self.page_no()}/{{nb}}", align="R")
+        #fodf2 calls this function automatically at the bottom of every page
+        self.set_y(-12)                                                          # 12 mm above the bottom edge
+        self.set_font("Helvetica", "I", 8)                                       # Font: Helvetica, italic, size 8
+        self.set_text_color(130, 130, 130)                                       # colour of the text: grey
+        self.cell(0, 6, _t("Going Concern Audit - confidential"), align="L")     # note on the left 
+        self.cell(0, 6, f"Page {self.page_no()}/{{nb}}", align="R")              # Page-Number (e.g. 1/3) on the right, ({nb} = total pages
 
     def h1(self, text):
-        self.set_font("Helvetica", "B", 18)
-        self.set_text_color(*INK)
-        self.multi_cell(0, 9, _t(text), new_x="LMARGIN", new_y="NEXT")
-        self.ln(1)
+        # Main title of the pdf (large & bold)
+        self.set_font("Helvetica", "B", 18)                                 # Font: Helvetica, bold, size 18
+        self.set_text_color(*INK)                                           # dark main color (* unpacks the three RGB numbers)
+        self.multi_cell(0, 9, _t(text), new_x="LMARGIN", new_y="NEXT")      # text may wrap, then the next line
+        self.ln(1)                                                          # 1 mm space below
 
     def h2(self, text):
-        self.ln(3)
-        self.set_font("Helvetica", "B", 12)
-        self.set_text_color(*INK)
-        self.cell(0, 8, _t(text), new_x="LMARGIN", new_y="NEXT")
+        # Section heading, e.g. "3 . Legal thresholds"
+        self.ln(3)                                                          # 3 mm space above the section
+        self.set_font("Helvetica", "B", 12)                                 # Font: Helvetica, bold, size 12
+        self.set_text_color(*INK)                                       
+        self.cell(0, 8, _t(text), new_x="LMARGIN", new_y="NEXT")            # one line, then next line
 
     def para(self, text, size=10, bold=False):
-        self.set_font("Helvetica", "B" if bold else "", size)
-        self.set_text_color(40, 40, 40)
-        self.multi_cell(0, 5, _t(text), new_x="LMARGIN", new_y="NEXT")
+        # Normal paragraph, long text wraps automatically 
+        self.set_font("Helvetica", "B" if bold else "", size)               # bold only if requested
+        self.set_text_color(40, 40, 40)                                     # almost black
+        self.multi_cell(0, 5, _t(text), new_x="LMARGIN", new_y="NEXT")      # width 0 = full page width 
 
-    def dot(self, status, x=None, y=None, d=3.2):
+    def dot(self, status, x=None, y=None, d=3.2): 
+        #                            
         x = self.get_x() + 1 if x is None else x
         y = self.get_y() + 1.4 if y is None else y
         self.set_fill_color(*COLOURS.get(status, COLOURS["grey"]))
