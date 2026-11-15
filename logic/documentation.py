@@ -6,23 +6,23 @@ Sections:
     2. Audit files in a SQLite database (save, list, load, delete)
 """
 
-import io
-import json
-import os
-import sqlite3
-from datetime import date, datetime
+import io                               # treats data in memory like a file (chart image for PDF, JSON for database)
+import json                             # converts Python data into JSON text and back (to store data in database)
+import os                               # works with folders and file paths (location of database file)
+import sqlite3                          # file-based database that is part of Python (saved audit files)
+from datetime import date, datetime     # today's date for the pdf, date and time when an audit file is saved
 
-import matplotlib
-import pandas as pd
-from fpdf import FPDF
-from fpdf.fonts import FontFace
+import matplotlib                       # external library for charts (trend chart in pdf)
+import pandas as pd                     # external library for tables (financial statements, liquidity plan)
+from fpdf import FPDF                   # external library that creates pdf document
+from fpdf.fonts import FontFace         # describes a font style (bold, size, color) for pdf tables
 
-matplotlib.use("Agg")  # render charts without a screen
-import matplotlib.pyplot as plt  # noqa: E402  (must come after matplotlib.use)
+matplotlib.use("Agg")                   # render charts without a screen (only as an image, no window opens)
+import matplotlib.pyplot as plt         # noqa: E402  (must come after matplotlib.use) -> drawing functions for charts
 
-from logic import analysis
-from logic.data_input import KEYS
-from logic.ml_model import ROOT
+from logic import analysis              # our own file: ratios and legal tests (shown in the pdf)
+from logic.data_input import KEYS       # our own file: list of standard line items (to load saved tables)
+from logic.ml_model import ROOT         # our own file: path of project folder (to find the data folder)
 
 
 # ============================================================================
