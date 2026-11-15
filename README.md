@@ -86,31 +86,18 @@ Without API key and model the app still works with the sample companies.
 | 7 Assessment & report | Overall risk, auditor's conclusion → auditor's report, PDF download, save |
 | Audit files | Saved assessments in a SQLite database |
 
-## Grading requirements – where to find them
-
-| Requirement | Where |
-|---|---|
-| 1. Problem statement | Home page, this README |
-| 2. API / database | Claude API (`logic/data_input.py`), SQLite (`logic/documentation.py`) |
-| 3. Visualisation | Traffic lights, trend charts, liquidity chart, ML explanation, risk gauge |
-| 4. User interaction | Company profile, upload, editable tables, questionnaire, liquidity planner, weight sliders, conclusion, PDF, save/load |
-| 5. Machine learning | `logic/ml_model.py`, page 6 |
-| 6. Comments | All files |
-| 7. Contributions & GenAI | Table below (present it in the video) |
-| 8. Video | 4 minutes, own voice |
-
 ## Contribution matrix
 
 | Part | Files | Franco | Juled | Maiara | Nicole | Zehra |
 |---|---|---|---|---|---|---|
-| Concept, problem statement | `0_home.py`, README | | | | | |
-| Company profile | `1_company_profile.py`, `data_input.py` | | | | | |
-| Financial statements & AI | `2_financial_statements.py`, `data_input.py` | | | | | |
-| Ratios & legal tests | `3_ratio_analysis.py`, `analysis.py` | | | | | |
-| ISA 570 questionnaire | `4_questionnaire.py`, `assessment.py` | | | | | |
-| Liquidity planner | `5_liquidity_planner.py`, `analysis.py` | | | | | |
+| Concept, problem statement | `0_home.py`, README |X| | | | |
+| Company profile | `1_company_profile.py`, `data_input.py` | | | | |X|
+| Financial statements & AI | `2_financial_statements.py`, `data_input.py` |X| | | |X|
+| Ratios & legal tests | `3_ratio_analysis.py`, `analysis.py` | |X| | | |
+| ISA 570 questionnaire | `4_questionnaire.py`, `assessment.py` | | | |X| |
+| Liquidity planner | `5_liquidity_planner.py`, `analysis.py` | | |X| | |
 | Machine learning | `6_bankruptcy_model.py`, `ml_model.py` | | | | | |
-| Assessment, PDF, database | `7_assessment_report.py`, `8_audit_files.py`, `assessment.py`, `documentation.py` | | | | | |
+| Assessment, PDF, database | `7_assessment_report.py`, `8_audit_files.py`, `assessment.py`, `documentation.py` | | | | |X|
 | Video | – | | | | | |
 
 **Use of generative AI** – answer in the video: Which tools did we use? For which parts?
