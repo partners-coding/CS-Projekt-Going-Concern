@@ -512,11 +512,12 @@ def check_balance(df):
                             f"({fy.total_liabilities + fy.equity:,.0f}) differ by {diff:,.0f}.")
     return warnings
 
-
-def standardise(files, api_key=None, model=DEFAULT_MODEL, client=None):
+# Now we combine all the steps: the auditor uploads files, 1) we convert them to content blocks, call the Claude API, parse the answer into a table, and check the balance. 
+# We return the table, the AI answer, and any balance check warnings.
+def standardise(files, api_key=None, model=DEFAULT_MODEL, client=None): 
     """Complete pipeline. files: list of (file name, bytes).
     Returns (table, AI answer, list of balance check warnings)."""
-    content = [block for name, data in files for block in file_to_content(name, data)]
-    answer = call_claude(content, api_key, model, client)
-    table = answer_to_table(answer)
-    return table, answer, check_balance(table)
+    content = [block for name, data in files for block in file_to_content(name, data)]      # For every uploaded file we create content blocks for the Claude API, they're all combined into one list of content blocks
+    answer = call_claude(content, api_key, model, client)                                   # The content blocks are sent to the Claude API, which returns a JSON answer that follows the schema we defined above. The answer gets put into a Python dictionary
+    table = answer_to_table(answer)                                                         # The AI answer is converted into a DataFrame with the line items as rows and the years as columns. 
+    return table, answer, check_balance(table)                                              # The function returns the table, the AI answer, and any balance check warnings. The auditor can then review the table and make any corrections before proceeding with the analysis.
